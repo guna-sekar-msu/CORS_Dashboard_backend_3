@@ -36,6 +36,7 @@ ALLOWED_HOSTS = [
     '.now.sh',
     '127.0.0.1',
     'localhost',
+    'cors.geodesy.qual.ees.msu.edu'
 ]
 
 

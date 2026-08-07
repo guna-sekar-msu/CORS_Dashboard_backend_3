@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from cors_app.models import generate_station_list
+from cors_app.models import annotate_station_filter, generate_station_list
 
 
 class GenerateStationListTests(TestCase):
@@ -28,3 +28,17 @@ class GenerateStationListTests(TestCase):
         self.assertNotIn("wrms_x", feature["properties"])
         self.assertNotIn("wrms_y", feature["properties"])
         self.assertNotIn("wrms_z", feature["properties"])
+
+    def test_annotate_station_filter_marks_matching_and_non_matching_stations(self):
+        filtered_stations = [{"station_id": "ABC", "current_x": 6378137.0, "current_y": 0.0, "current_z": 0.0}]
+        base_stations = [
+            {"station_id": "ABC", "current_x": 6378137.0, "current_y": 0.0, "current_z": 0.0},
+            {"station_id": "XYZ", "current_x": 6378137.0, "current_y": 0.0, "current_z": 0.0},
+        ]
+
+        result = annotate_station_filter(filtered_stations, base_stations)
+        features = result["features"]
+
+        self.assertEqual(len(features), 2)
+        self.assertEqual(features[0]["properties"]["filter"], "yes")
+        self.assertEqual(features[1]["properties"]["filter"], "no")

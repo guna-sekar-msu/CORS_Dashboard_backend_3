@@ -55,12 +55,16 @@ class StacovJsonView(APIView):
                         },
                         timeout=30
                     )
-
-                    if 'error' in response_data and response_data.get('status_code', 0) >= 400:
+                    
+                    if response_data.get('status_code', 400) >= 400:
+                        print(f"FastAPI returned error: {response_data}")
+                    # if 'error' in response_data and response_data.get('status_code', 0) >= 400:
                         return Response(response_data, status=response_data.get('status_code', status.HTTP_502_BAD_GATEWAY))
 
                     # If FastAPI returned a non-200 status (validation error, not found, etc.),
                     # forward that response to the frontend instead of attempting to process it.
+                    
+
                     status_code = response_data.get('status_code', 200)
                     if status_code != 200:
                         body = response_data.get('body')

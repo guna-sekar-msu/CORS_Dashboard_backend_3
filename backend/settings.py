@@ -37,6 +37,7 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
     'cors.geodesy.qual.ees.msu.edu'
+    '35.9.242.16',
 ]
 
 

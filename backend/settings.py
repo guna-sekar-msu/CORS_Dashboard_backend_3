@@ -78,7 +78,7 @@ CORS_ALLOWED_ORIGINS = [
     'https://glistening-wisp-77f858.netlify.app',
     'https://cors-dashboard-frontend-4.vercel.app',
     'https://msu-final-frontend.vercel.app',
-    "http://35.9.242.16/",
+    "http://35.9.242.16",
 ]
 
 ROOT_URLCONF = 'backend.urls'

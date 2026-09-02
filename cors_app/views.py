@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.conf import settings
-from .models import read_stacov, generate_geojson, generate_CSV_geojson,generate_MYCS2_geojson,generate_OPUSNET_geojson,generate_MYCS_uncertainty_geojson,generate_MYCS_uncertainty_geojson,generate_station_list, annotate_station_filter
+from .models import read_stacov, generate_geojson, generate_CSV_geojson,generate_MYCS2_geojson,generate_OPUSNET_geojson,generate_MYCS_uncertainty_geojson,generate_MYCS_uncertainty_geojson,generate_station_list
 import os
 import json
 from datetime import datetime
@@ -32,99 +32,65 @@ def home(request):
 class StacovJsonView(APIView):
     def post(self, request):
         try:
-            # Extract the date input from the frontend
-            #print("Request Data:", request.data)  # Debugging line to print the incoming request data
+            payload = request.data if isinstance(request.data, dict) else {}
+            params = payload.get('input_data') or {}
+            endpoint = payload.get('endpoint', '/stations')
 
-            # If frontend sent query params for FastAPI, forward them first
-            if request.data and request.data.get('input_data'):
-                params = request.data.get('input_data') or {}
-                # Allow caller to override endpoint (default to /stations)
-                endpoint = request.data.get('endpoint', '/stations')
-                #print(f"Forwarding request to FastAPI endpoint: {endpoint} with params: {params}")
-                try:
-                    response_data = FastAPIProxyService.proxy_request(
-                        endpoint=endpoint,
-                        method='GET',
-                        params=params,
-                        headers={
-                            k: v
-                            for k, v in request.headers.items()
-                            if k.lower() not in {
-                                'host', 'content-length', 'accept-encoding', 'connection', 'transfer-encoding'
-                            }
-                        },
-                        timeout=30
-                    )
-                    
-                    if response_data.get('status_code', 400) >= 400:
-                        print(f"FastAPI returned error: {response_data}")
-                    # if 'error' in response_data and response_data.get('status_code', 0) >= 400:
-                        return Response(response_data, status=response_data.get('status_code', status.HTTP_502_BAD_GATEWAY))
+            try:
+                response_data = FastAPIProxyService.proxy_request(
+                    endpoint=endpoint,
+                    method='GET',
+                    params=params,
+                    headers={
+                        k: v
+                        for k, v in request.headers.items()
+                        if k.lower() not in {
+                            'host', 'content-length', 'accept-encoding', 'connection', 'transfer-encoding'
+                        }
+                    },
+                    timeout=30
+                )
 
-                    # If FastAPI returned a non-200 status (validation error, not found, etc.),
-                    # forward that response to the frontend instead of attempting to process it.
-                    
+                if response_data.get('status_code', 400) >= 400:
+                    print(f"FastAPI returned error: {response_data}")
+                    return Response(response_data, status=response_data.get('status_code', status.HTTP_502_BAD_GATEWAY))
 
-                    status_code = response_data.get('status_code', 200)
-                    if status_code != 200:
-                        body = response_data.get('body')
-                        response_headers = response_data.get('headers', {}) or {}
-                        content_type = response_data.get('content_type')
-
-                        # Include status_code in the returned JSON so frontend can inspect it
-                        if isinstance(body, dict):
-                            forwarded_body = dict(body)
-                            forwarded_body['status_code'] = status_code
-                        else:
-                            forwarded_body = {
-                                'status_code': status_code,
-                                'detail': body
-                            }
-
-                        if content_type:
-                            return Response(forwarded_body, status=status_code, headers=response_headers, content_type=content_type)
-                        return Response(forwarded_body, status=status_code, headers=response_headers)
-
+                status_code = response_data.get('status_code', 200)
+                if status_code != 200:
                     body = response_data.get('body')
+                    response_headers = response_data.get('headers', {}) or {}
+                    content_type = response_data.get('content_type')
 
-                    # FastAPI may wrap station list; try common keys
-                    if isinstance(body, dict) and 'stations' in body:
-                        print("Stations found in response body under 'stations' key.")
-                        stations = body['stations']
-                    elif isinstance(body, dict) and 'data' in body:
-                        print("Stations found in response body under 'data' key.")
-                        stations = body['data']
+                    if isinstance(body, dict):
+                        forwarded_body = dict(body)
+                        forwarded_body['status_code'] = status_code
                     else:
-                        print("Stations found in response body directly.")
-                        stations = body
+                        forwarded_body = {
+                            'status_code': status_code,
+                            'detail': body
+                        }
 
-                    # Fetch base station list from the base /stations/ endpoint to compare
-                    try:
-                        base_response = FastAPIProxyService.proxy_request(endpoint='/stations', method='GET')
-                        base_body = base_response.get('body') if isinstance(base_response, dict) else None
-                        if isinstance(base_body, dict) and 'stations' in base_body:
-                            base_stations = base_body['stations']
-                        elif isinstance(base_body, dict) and 'data' in base_body:
-                            base_stations = base_body['data']
-                        else:
-                            base_stations = base_body or []
-                    except Exception:
-                        base_stations = []
+                    if content_type:
+                        return Response(forwarded_body, status=status_code, headers=response_headers, content_type=content_type)
+                    return Response(forwarded_body, status=status_code, headers=response_headers)
 
-                    station_list = annotate_station_filter(stations, base_stations)
-                    return Response(station_list, status=response_data.get('status_code', status.HTTP_200_OK))
-                except Exception as e:
-                    return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            elif request.data is None or not request.data.get('input_data'):
-                 url = "http://127.0.0.1:8000/stations/"
-                 response_data = requests.get(url)
-                 try:
-                     response_data.raise_for_status()
-                     data = response_data.json()
-                     station_list = generate_station_list(data)
-                     return Response(station_list, status=status.HTTP_200_OK)
-                 except requests.exceptions.RequestException as e:
-                     return Response({"error": f"Failed to fetch data: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+                body = response_data.get('body')
+
+                if isinstance(body, dict) and 'stations' in body:
+                    stations = body['stations']
+                elif isinstance(body, dict) and 'data' in body:
+                    stations = body['data']
+                else:
+                    stations = body if isinstance(body, list) else []
+
+                if isinstance(stations, list):
+                    station_list = generate_station_list(stations)
+                else:
+                    station_list = stations or {"type": "FeatureCollection", "features": []}
+
+                return Response(station_list, status=status_code)
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

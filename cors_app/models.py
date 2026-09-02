@@ -476,46 +476,16 @@ def _extract_station_id(item):
     return None
 
 
-def annotate_station_filter(filtered_stations, base_stations):
-    filtered_geojson = generate_station_list(filtered_stations)
-    base_geojson = generate_station_list(base_stations)
+def annotate_station_filter(filtered_stations, base_stations=None):
+    """Backward-compatible no-op for station preprocessing.
 
-    matched_ids = set()
-    for feature in filtered_geojson.get('features', []):
-        props = feature.get('properties', {})
-        station_id = _extract_station_id(props)
-        if station_id is None:
-            station_id = _extract_station_id(feature)
-        if station_id is not None:
-            matched_ids.add(str(station_id))
-
-    merged_features = []
-    seen_ids = set()
-
-    for feature in filtered_geojson.get('features', []):
-        props = feature.get('properties', {})
-        station_id = _extract_station_id(props)
-        if station_id is None:
-            station_id = _extract_station_id(feature)
-        if station_id is not None:
-            seen_ids.add(str(station_id))
-        props['filter'] = 'yes' if station_id is not None and str(station_id) in matched_ids else 'no'
-        merged_features.append(feature)
-
-    for feature in base_geojson.get('features', []):
-        props = feature.get('properties', {})
-        station_id = _extract_station_id(props)
-        if station_id is None:
-            station_id = _extract_station_id(feature)
-        if station_id is not None and str(station_id) in seen_ids:
-            continue
-        props['filter'] = 'no'
-        merged_features.append(feature)
-
-    return {
-        'type': 'FeatureCollection',
-        'features': merged_features
-    }
+    Comparison and filter=yes/no flags were removed from the backend response.
+    We still keep this helper so older callers do not break, but it now simply
+    returns the processed GeoJSON for the filtered station list without adding any
+    compare metadata.
+    """
+    stations = filtered_stations or []
+    return generate_station_list(stations)
 
 
 def generate_station_list(X):

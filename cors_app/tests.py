@@ -29,7 +29,7 @@ class GenerateStationListTests(TestCase):
         self.assertNotIn("wrms_y", feature["properties"])
         self.assertNotIn("wrms_z", feature["properties"])
 
-    def test_annotate_station_filter_marks_matching_and_non_matching_stations(self):
+    def test_annotate_station_filter_does_not_add_compare_flags(self):
         filtered_stations = [{"station_id": "ABC", "current_x": 6378137.0, "current_y": 0.0, "current_z": 0.0}]
         base_stations = [
             {"station_id": "ABC", "current_x": 6378137.0, "current_y": 0.0, "current_z": 0.0},
@@ -39,6 +39,5 @@ class GenerateStationListTests(TestCase):
         result = annotate_station_filter(filtered_stations, base_stations)
         features = result["features"]
 
-        self.assertEqual(len(features), 2)
-        self.assertEqual(features[0]["properties"]["filter"], "yes")
-        self.assertEqual(features[1]["properties"]["filter"], "no")
+        self.assertEqual(len(features), 1)
+        self.assertNotIn("filter", features[0]["properties"])

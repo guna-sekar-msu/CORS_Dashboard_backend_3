@@ -1,4 +1,5 @@
 import os
+import math
 import numpy as np
 import pandas as pd
 import json
@@ -82,6 +83,116 @@ def convert_ecef_data(payload):
         return [convert_ecef_data(item) for item in payload]
 
     return payload
+
+
+def _normalize_xyz_value(value):
+    if value is None or value == '':
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return value
+
+
+def _calculate_3d_difference(x_value, y_value, z_value):
+    if x_value is None or y_value is None or z_value is None:
+        return None
+
+    try:
+        dx = float(x_value)
+        dy = float(y_value)
+        dz = float(z_value)
+    except (TypeError, ValueError):
+        return None
+
+    magnitude = math.sqrt(dx * dx + dy * dy + dz * dz)
+    return {
+        'meters': magnitude,
+        'millimeters': magnitude * 1000,
+        'centimeters': magnitude * 100,
+    }
+
+
+def _normalize_xyz_object(value, include_location=True):
+    if isinstance(value, dict):
+        normalized = {}
+        for key in ('x', 'y', 'z'):
+            if key in value:
+                normalized[key] = _normalize_xyz_value(value.get(key))
+        for key, item in value.items():
+            if key not in {'x', 'y', 'z'}:
+                normalized[key] = item
+
+        if include_location:
+            xyz_values = [normalized.get('x'), normalized.get('y'), normalized.get('z')]
+            if all(v is not None for v in xyz_values):
+                try:
+                    lat, lon, _ = ecef_to_llh(float(xyz_values[0]), float(xyz_values[1]), float(xyz_values[2]))
+                    normalized['latitude'] = lat
+                    normalized['longitude'] = lon
+                    normalized['location_details'] = {
+                        'latitude': lat,
+                        'longitude': lon,
+                    }
+                except (TypeError, ValueError):
+                    pass
+
+        return normalized
+
+    if isinstance(value, (list, tuple)) and len(value) >= 3:
+        try:
+            normalized = {
+                'x': _normalize_xyz_value(value[0]),
+                'y': _normalize_xyz_value(value[1]),
+                'z': _normalize_xyz_value(value[2]),
+            }
+            if include_location:
+                xyz_values = [normalized.get('x'), normalized.get('y'), normalized.get('z')]
+                if all(v is not None for v in xyz_values):
+                    lat, lon, _ = ecef_to_llh(float(xyz_values[0]), float(xyz_values[1]), float(xyz_values[2]))
+                    normalized['latitude'] = lat
+                    normalized['longitude'] = lon
+                    normalized['location_details'] = {
+                        'latitude': lat,
+                        'longitude': lon,
+                    }
+            return normalized
+        except Exception:
+            return value
+
+    return value
+
+
+def preprocess_comparison_payload(payload):
+    if not isinstance(payload, dict):
+        return payload
+
+    processed = dict(payload)
+
+    if 'measurement' in processed:
+        processed['measurement'] = _normalize_xyz_object(processed['measurement'], include_location=True)
+    if 'prediction' in processed:
+        processed['prediction'] = _normalize_xyz_object(processed['prediction'], include_location=True)
+    if 'difference' in processed:
+        processed['difference'] = _normalize_xyz_object(processed['difference'], include_location=False)
+
+    if 'difference' in processed and isinstance(processed['difference'], dict):
+        diff = processed['difference']
+        magnitude = _calculate_3d_difference(diff.get('x'), diff.get('y'), diff.get('z'))
+        if magnitude is not None:
+            diff['difference_3d'] = magnitude['meters']
+            diff['difference_3d_mm'] = magnitude['millimeters']
+            diff['difference_3d_cm'] = magnitude['centimeters']
+
+    if 'error_threshold_exceeded' in processed:
+        value = processed['error_threshold_exceeded']
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            processed['error_threshold_exceeded'] = 'Yes' if normalized in {'yes', 'y', 'true', '1'} else 'No'
+        elif isinstance(value, bool):
+            processed['error_threshold_exceeded'] = 'Yes' if value else 'No'
+
+    return processed
 
 def read_stacov(file):
     content = file.read().decode("utf-8").splitlines()

@@ -32,12 +32,11 @@ SECRET_KEY = 'django-insecure-&8_g@jpay!6iun(k)dpk#ejm+#uih@zr#r5#&0bg+iv6l4l3te
 DEBUG = True
 
 ALLOWED_HOSTS = [
-    '.vercel.app',
-    '.now.sh',
     '127.0.0.1',
     'localhost',
     'cors.geodesy.qual.ees.msu.edu',
-    '35.9.242.16'
+    '35.9.242.16',
+    'apicors.geodesy.qual.ees.msu.edu/'
 ]
 
 
